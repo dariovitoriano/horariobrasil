@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <title>B3 Overlay - Fusos Horários Sincronizados</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            width: 1280px; height: 720px; overflow: hidden;
+            background: #000; font-family: 'Segoe UI', Arial, sans-serif;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: 1fr 1fr;
+            cursor: pointer;
+        }
+
+        #bg-container {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1; opacity: 0.2;
+        }
+        #foto-cidade { width: 100%; height: 100%; object-fit: cover; transition: opacity 1.5s ease; }
+
+        .quadrante {
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            border: 1px solid rgba(255,255,255,0.05);
+            text-align: center;
+            background: rgba(0,0,0,0.4);
+        }
+
+        .nome-fuso {
+            font-size: 24px; letter-spacing: 4px;
+            color: #aaa; margin-bottom: 10px; font-weight: bold;
+        }
+
+        .hora {
+            font-size: 90px; font-weight: 900;
+            color: #fff; font-variant-numeric: tabular-nums;
+        }
+
+        .cidades-exemplo {
+            font-size: 14px; color: #555; margin-top: 10px;
+            letter-spacing: 1px;
+        }
+
+        #audio-status {
+            position: fixed; bottom: 20px; width: 100%;
+            text-align: center; color: #444; font-size: 12px;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="bg-container">
+        <img id="foto-cidade" src="" alt="Brasil">
+    </div>
+
+    <div class="quadrante">
+        <div class="nome-fuso">FERNANDO DE NORONHA (UTC-2)</div>
+        <div id="fuso-noronha" class="hora">--:--:--</div>
+        <div class="cidades-exemplo">ARQUIPÉLAGOS E ILHAS</div>
+    </div>
+
+    <div class="quadrante">
+        <div class="nome-fuso">HORÁRIO DE BRASÍLIA (UTC-3)</div>
+        <div id="fuso-brasilia" class="hora">--:--:--</div>
+        <div class="cidades-exemplo">SUL, SUDESTE, NORDESTE, GO, DF, TO, PA, AP</div>
+    </div>
+
+    <div class="quadrante">
+        <div class="nome-fuso">HORÁRIO DO AMAZONAS (UTC-4)</div>
+        <div id="fuso-amazonas" class="hora">--:--:--</div>
+        <div class="cidades-exemplo">AM, MS, MT, RO, RR</div>
+    </div>
+
+    <div class="quadrante">
+        <div class="nome-fuso">HORÁRIO DO ACRE (UTC-5)</div>
+        <div id="fuso-acre" class="hora">--:--:--</div>
+        <div class="cidades-exemplo">ACRE E OESTE DO AMAZONAS</div>
+    </div>
+
+    <div id="audio-status">SINCRONIZANDO COM SERVIDOR... (CLIQUE PARA ÁUDIO)</div>
+
+    <audio id="som-chuva" loop>
+        <source src="https://assets.mixkit.co/active_storage/sfx/2434/2434-preview.mp3" type="audio/mpeg">
+    </audio>
+
+    <script>
+        const cidades = [
+            { foto: "https://images.unsplash.com/photo-1601362840469-51e4d8d39785?w=1280" },
+            { foto: "https://images.unsplash.com/photo-1483729558449-99ef09a8c325?w=1280" },
+            { foto: "https://images.unsplash.com/photo-1543269664-76bc3997d9ea?w=1280" },
+            { foto: "https://images.unsplash.com/photo-1599424423719-75a7f98f62f1?w=1280" }
+        ];
+
+        let offsetServidor = 0; // Diferença em ms entre servidor e PC local
+        let idxCidade = 0;
+
+        // 1. BUSCA O HORÁRIO REAL DO SERVIDOR (WORLD TIME API)
+        async function sincronizarComServidor() {
+            try {
+                const start = Date.now();
+                const response = await fetch('https://worldtimeapi.org/api/timezone/America/Sao_Paulo');
+                const data = await response.json();
+                const end = Date.now();
+                
+                // Calcula a latência da rede e ajusta o horário
+                const tempoRede = (end - start) / 2;
+                const dataReal = new Date(data.datetime).getTime() + tempoRede;
+                
+                offsetServidor = dataReal - end;
+                document.getElementById('audio-status').innerText = "SINCRONIZADO | CLIQUE PARA ATIVAR SOM DE CHUVA";
+            } catch (error) {
+                console.error("Erro ao sincronizar. Usando hora local como backup.");
+                document.getElementById('audio-status').innerText = "OFFLINE | USANDO HORA LOCAL";
+            }
+        }
+
+        function atualizarRelogios() {
+            // Aplica o offset do servidor à hora atual do PC
+            const agora = new Date(Date.now() + offsetServidor);
+
+            const formatar = (fuso) => {
+                return agora.toLocaleTimeString('pt-BR', {
+                    timeZone: fuso,
+                    hour: '2-digit', minute: '2-digit', second: '2-digit',
+                    hour12: false
+                }).toUpperCase();
+            };
+
+            document.getElementById('fuso-noronha').innerText = formatar('Brazil/DeNoronha');
+            document.getElementById('fuso-brasilia').innerText = formatar('America/Sao_Paulo');
+            document.getElementById('fuso-amazonas').innerText = formatar('America/Manaus');
+            document.getElementById('fuso-acre').innerText = formatar('America/Rio_Branco');
+        }
+
+        function alternarCidade() {
+            const img = document.getElementById('foto-cidade');
+            img.style.opacity = 0;
+            setTimeout(() => {
+                img.src = cidades[idxCidade].foto;
+                img.style.opacity = 0.2;
+                idxCidade = (idxCidade + 1) % cidades.length;
+            }, 1000);
+        }
+
+        window.addEventListener('click', () => {
+            const chuva = document.getElementById('som-chuva');
+            chuva.volume = 0.4;
+            chuva.play();
+            document.getElementById('audio-status').style.display = 'none';
+        }, { once: true });
+
+        // Inicialização
+        sincronizarComServidor();
+        setInterval(atualizarRelogios, 100
